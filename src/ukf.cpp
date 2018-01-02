@@ -20,16 +20,16 @@ UKF::UKF() {
   use_radar_ = true;
 
   // initial state vector
-  x_ = VectorXd(5);
+  x_ = VectorXd::Zero(5);
 
   // initial covariance matrix
   P_ = MatrixXd::Zero(5, 5);
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
-  std_a_ = 30.0;
+  std_a_ = 5.0;
 
   // Process noise standard deviation yaw acceleration in rad/s^2
-  std_yawdd_ = 1.0;
+  std_yawdd_ = 1.5;
   
   //DO NOT MODIFY measurement noise values below these are provided by the sensor manufacturer.
   // Laser measurement noise standard deviation position1 in m
@@ -65,10 +65,13 @@ UKF::UKF() {
   lambda_ = 3 - n_aug_;
 
   // define vector for weights
-  weights_ = VectorXd(2 * n_aug_ + 1);
+  weights_ = VectorXd::Zero(2 * n_aug_ + 1);
 
   // define matrix for predicted sigma points
   Xsig_pred_ = MatrixXd::Zero(n_x_, 2 * n_aug_ + 1);
+
+  NIS_laser_ = 0.0;
+  NIS_radar_ = 0.0;
 }
 
 UKF::~UKF() {}
@@ -107,7 +110,6 @@ void UKF::InitializeMeasurement(MeasurementPackage meas_package) {
   time_us_ = meas_package.timestamp_;
 
   is_initialized_ = true;
-  return;
 }
 /**
  * @param {MeasurementPackage} meas_package The latest measurement data of
@@ -120,8 +122,10 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
   Complete this function! Make sure you switch between lidar and radar
   measurements.
   */
-  if (!is_initialized_)
+  if (!is_initialized_) {
     InitializeMeasurement(meas_package);
+    return;
+  }
 
   cout << "ProcessMeasurement starts" << endl;
   // prediction
@@ -130,18 +134,13 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
   // Prediction(delta_t);
 
-  try {
-    Prediction(delta_t);
-  } catch (std::range_error e) {
-    // If convariance matrix is non positive definite (because of numerical instability),
-    // restart the filter using previous measurement as initialiser.
-    InitializeMeasurement(previous_package);
-    // Redo prediction using the current measurement
-    // We don't get exception this time, because initial P (identity) is positive definite.
-    Prediction(delta_t);
+  while (delta_t > 0.1)
+  {
+    const double dt = 0.05;
+    Prediction(dt);
+    delta_t -= dt;
   }
-
-  previous_package = meas_package;
+  Prediction(delta_t);
 
   // update
   if ((meas_package.sensor_type_ == MeasurementPackage::LASER) && use_laser_) {
@@ -171,7 +170,7 @@ void UKF::Prediction(double delta_t) {
   ///////////////////////////
 
   // create augmented state vector
-  VectorXd x_aug = VectorXd(n_aug_);
+  VectorXd x_aug = VectorXd::Zero(n_aug_);
   x_aug.head(5) = x_;
   x_aug(5) = 0;
   x_aug(6) = 0;
@@ -188,18 +187,8 @@ void UKF::Prediction(double delta_t) {
   P_aug.topLeftCorner(5,5) = P_;
   P_aug.bottomRightCorner(2,2) = Q;
 
-  // handle decomposition failure
-
   // Take matrix square root
-  // 1. compute the Cholesky decomposition of P_aug
-  Eigen::LLT<MatrixXd> lltOfPaug(P_aug);
-  if (lltOfPaug.info() == Eigen::NumericalIssue) {
-    // if decomposition fails, we have numerical issues
-    std::cout << "LLT failed!" << std::endl;
-    throw std::range_error("LLT failed");
-  }
-  // 2. get the lower triangle
-  MatrixXd L = lltOfPaug.matrixL();
+  MatrixXd L = P_aug.llt().matrixL();
 
   // create augmented sigma points matrix
   MatrixXd Xsig_aug = MatrixXd::Zero(n_aug_, 2 * n_aug_ + 1);
@@ -274,10 +263,15 @@ void UKF::Prediction(double delta_t) {
   }
 
   // predicted state covariance matrix
-  P_.fill(0.0);
+  // P_.fill(0.0);
+  P_ << 1., 0., 0., 0., 0.,
+        0., 1., 0., 0., 0.,
+        0., 0., 1., 0., 0.,
+        0., 0., 0., 1., 0.,
+        0., 0., 0., 0., 1.;
   for (int i = 0; i < 2 * n_aug_ + 1; i++) {
     // state difference
-    VectorXd x_diff = Xsig_pred_.col(i) - x_;
+    VectorXd x_diff = Xsig_pred_.col(i) - Xsig_pred_.col(0); //x_;
 
     // normalize angle of yaw
     x_diff(3) = tools.NormalizeAngle(x_diff(3));
@@ -325,6 +319,10 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   x_ += (K * y);
   MatrixXd I = MatrixXd::Identity(x_.size(), x_.size());
   P_ = (I - K * H_laser) * P_;
+  
+  NIS_laser_ = (meas_package.raw_measurements_-z_pred).transpose()*S.inverse()*(meas_package.raw_measurements_-z_pred);
+  cout << "laser NIS = " << NIS_laser_ << endl;
+
   cout << "UpdateLidar ends" << endl;
 }
 
@@ -369,7 +367,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   }
 
   // mean of predicted measurement
-  VectorXd z_pred = VectorXd(n_z);
+  VectorXd z_pred = VectorXd::Zero(n_z);
   z_pred.fill(0.0);
   for (int i=0; i < 2 * n_aug_ + 1; i++) {
       z_pred += weights_(i) * Zsig.col(i);
@@ -380,7 +378,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   S.fill(0.0);
   for (int i = 0; i < 2 * n_aug_ + 1; i++) {  // 2n+1 simga points
     // residual
-    VectorXd z_diff = Zsig.col(i) - z_pred;
+    VectorXd z_diff = Zsig.col(i) - Zsig.col(0); //z_pred;
 
     // normalize angle - phi
     z_diff(1) = tools.NormalizeAngle(z_diff(1));
@@ -403,7 +401,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   MatrixXd Tc = MatrixXd::Zero(n_x_, n_z);
 
   //create example vector for incoming radar measurement
-  VectorXd z = VectorXd(n_z);
+  VectorXd z = VectorXd::Zero(n_z);
   z = meas_package.raw_measurements_;
 
   //calculate cross correlation matrix
@@ -411,12 +409,12 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   for (int i = 0; i < 2 * n_aug_ + 1; i++) {  // 2n+1 simga points
 
     // residual
-    VectorXd z_diff = Zsig.col(i) - z_pred;
+    VectorXd z_diff = Zsig.col(i) - Zsig.col(0); //z_pred;
     //angle normalization
     z_diff(1) = tools.NormalizeAngle(z_diff(1));
 
     // state difference
-    VectorXd x_diff = Xsig_pred_.col(i) - x_;
+    VectorXd x_diff = Xsig_pred_.col(i) - Xsig_pred_.col(0); //x_;
 
     // angle normalization
     x_diff(3) = tools.NormalizeAngle(x_diff(3));
@@ -436,5 +434,9 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   // update state mean and covariance matrix
   x_ = x_ + K * z_diff;
   P_ = P_ - K * S * K.transpose();
+
+  NIS_radar_ = z_diff.transpose() * S.inverse() * z_diff;
+  cout << "radar NIS = " << NIS_radar_ << endl;
+
   cout << "UpdateRadar ends" << endl;
 }
