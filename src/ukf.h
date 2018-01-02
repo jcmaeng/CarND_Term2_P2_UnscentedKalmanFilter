@@ -2,6 +2,7 @@
 #define UKF_H
 
 #include "measurement_package.h"
+#include "tools.h"
 #include "Eigen/Dense"
 #include <vector>
 #include <string>
@@ -67,6 +68,8 @@ public:
   ///* Sigma point spreading parameter
   double lambda_;
 
+  Tools tools;
+  MeasurementPackage previous_package;
 
   /**
    * Constructor
@@ -78,6 +81,7 @@ public:
    */
   virtual ~UKF();
 
+  void InitializeMeasurement(MeasurementPackage meas_package);
   /**
    * ProcessMeasurement
    * @param meas_package The latest measurement data of either radar or laser
