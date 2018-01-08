@@ -26,10 +26,10 @@ UKF::UKF() {
   P_ = MatrixXd::Zero(5, 5);
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
-  std_a_ = 5.0;
+  std_a_ = 0.5;
 
   // Process noise standard deviation yaw acceleration in rad/s^2
-  std_yawdd_ = 1.5;
+  std_yawdd_ = 0.1;
   
   //DO NOT MODIFY measurement noise values below these are provided by the sensor manufacturer.
   // Laser measurement noise standard deviation position1 in m
@@ -55,6 +55,9 @@ UKF::UKF() {
 
   Hint: one or more values initialized above might be wildly off...
   */
+
+  previous_timestamp_ = 0.0;
+
   // set state dimension
   n_x_ = 5;
 
@@ -90,24 +93,24 @@ void UKF::InitializeMeasurement(MeasurementPackage meas_package) {
   }
   // for RADAR data
   if (meas_package.sensor_type_ == MeasurementPackage::RADAR && use_radar_) {
-    double ro = meas_package.raw_measurements_(0);
+    double rho = meas_package.raw_measurements_(0);
     double phi = meas_package.raw_measurements_(1);
-    double ro_dot = meas_package.raw_measurements_(2);
+    double rho_dot = meas_package.raw_measurements_(2);
 
-    double px = ro * cos(phi);
-    double py = ro * sin(phi);
+    double px = rho * cos(phi);
+    double py = rho * sin(phi);
 
     x_ << px, py, 0, 0, 0;
   }
 
-  P_ << 1., 0., 0., 0., 0.,
-        0., 1., 0., 0., 0.,
-        0., 0., 1., 0., 0.,
-        0., 0., 0., 1., 0.,
-        0., 0., 0., 0., 1.;
+  P_ << 0.01, 0., 0., 0., 0.,
+        0., 0.01, 0., 0., 0.,
+        0., 0., 1.0, 0., 0.,
+        0., 0., 0., 0.01, 0.,
+        0., 0., 0., 0., 0.01;
 
   // initialize previous time
-  time_us_ = meas_package.timestamp_;
+  previous_timestamp_ = meas_package.timestamp_;
 
   is_initialized_ = true;
 }
@@ -129,8 +132,8 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
   cout << "ProcessMeasurement starts" << endl;
   // prediction
-  double delta_t = (meas_package.timestamp_ - time_us_) / 1000000.0; // seconds
-  time_us_ = meas_package.timestamp_;
+  double delta_t = (meas_package.timestamp_ - previous_timestamp_) / 1000000.0; // seconds
+  previous_timestamp_ = meas_package.timestamp_;
 
   // Prediction(delta_t);
 
@@ -263,12 +266,8 @@ void UKF::Prediction(double delta_t) {
   }
 
   // predicted state covariance matrix
-  // P_.fill(0.0);
-  P_ << 1., 0., 0., 0., 0.,
-        0., 1., 0., 0., 0.,
-        0., 0., 1., 0., 0.,
-        0., 0., 0., 1., 0.,
-        0., 0., 0., 0., 1.;
+  P_.fill(0.0);
+  
   for (int i = 0; i < 2 * n_aug_ + 1; i++) {
     // state difference
     VectorXd x_diff = Xsig_pred_.col(i) - Xsig_pred_.col(0); //x_;
@@ -320,7 +319,7 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   MatrixXd I = MatrixXd::Identity(x_.size(), x_.size());
   P_ = (I - K * H_laser) * P_;
   
-  NIS_laser_ = (meas_package.raw_measurements_-z_pred).transpose()*S.inverse()*(meas_package.raw_measurements_-z_pred);
+  NIS_laser_ = (meas_package.raw_measurements_ - z_pred).transpose() * S.inverse() * (meas_package.raw_measurements_ - z_pred);
   cout << "laser NIS = " << NIS_laser_ << endl;
 
   cout << "UpdateLidar ends" << endl;

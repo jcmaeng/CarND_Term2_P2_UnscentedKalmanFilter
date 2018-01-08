@@ -71,6 +71,7 @@ public:
   double NIS_laser_;
   double NIS_radar_;
   Tools tools;
+  long long previous_timestamp_;
 
   /**
    * Constructor
