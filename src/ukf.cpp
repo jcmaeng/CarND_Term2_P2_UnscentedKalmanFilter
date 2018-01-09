@@ -26,10 +26,10 @@ UKF::UKF() {
   P_ = MatrixXd::Zero(5, 5);
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
-  std_a_ = 0.5;
+  std_a_ = .5;
 
   // Process noise standard deviation yaw acceleration in rad/s^2
-  std_yawdd_ = 0.5;
+  std_yawdd_ = .05;
   
   //DO NOT MODIFY measurement noise values below these are provided by the sensor manufacturer.
   // Laser measurement noise standard deviation position1 in m
@@ -56,7 +56,7 @@ UKF::UKF() {
   Hint: one or more values initialized above might be wildly off...
   */
 
-  previous_timestamp_ = 0.0;
+  time_us_ = 0.0;
 
   // set state dimension
   n_x_ = 5;
@@ -82,14 +82,14 @@ UKF::~UKF() {}
 void UKF::InitializeMeasurement(MeasurementPackage meas_package) {
   cout << "InitializeMeasurement starts" << endl;
   // initialize variables
-  x_ << 1, 1, 0, 0, 0;
+  x_ << 1, 1, 1, 1, 1;
 
   // for LIDAR data
   if (meas_package.sensor_type_ == MeasurementPackage::LASER && use_laser_) {
     double px = meas_package.raw_measurements_(0);
     double py = meas_package.raw_measurements_(1);
 
-    x_ << px, py, 0, 0, 0;
+    x_ << px, py, 1, 1, 1;
   }
   // for RADAR data
   if (meas_package.sensor_type_ == MeasurementPackage::RADAR && use_radar_) {
@@ -99,18 +99,20 @@ void UKF::InitializeMeasurement(MeasurementPackage meas_package) {
 
     double px = rho * cos(phi);
     double py = rho * sin(phi);
+    double vx = rho_dot * cos(phi);
+    double vy = rho_dot * sin(phi);
 
-    x_ << px, py, 0, 0, 0;
+    x_ << px, py, vx, vy, 1;
   }
 
-  P_ << 1.0, 0., 0., 0., 0.,
-        0., 1.0, 0., 0., 0.,
-        0., 0., 1000.0, 0., 0.,
-        0., 0., 0., 1.0, 0.,
-        0., 0., 0., 0., 1.0;
+  P_ << 1, 0., 0., 0., 0.,
+        0., 1, 0., 0., 0.,
+        0., 0., 1, 0., 0.,
+        0., 0., 0., 1, 0.,
+        0., 0., 0., 0., 1;
 
   // initialize previous time
-  previous_timestamp_ = meas_package.timestamp_;
+  time_us_ = meas_package.timestamp_;
 
   is_initialized_ = true;
 }
@@ -132,8 +134,8 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
   cout << "ProcessMeasurement starts" << endl;
   // prediction
-  double delta_t = (meas_package.timestamp_ - previous_timestamp_) / 1000000.0; // seconds
-  previous_timestamp_ = meas_package.timestamp_;
+  double delta_t = (meas_package.timestamp_ - time_us_) / 1000000.0; // seconds
+  time_us_ = meas_package.timestamp_;
 
   // Prediction(delta_t);
 
@@ -273,7 +275,7 @@ void UKF::Prediction(double delta_t) {
     VectorXd x_diff = Xsig_pred_.col(i) - Xsig_pred_.col(0); //x_;
 
     // normalize angle of yaw
-    x_diff(3) = tools.NormalizeAngle(x_diff(3));
+    x_diff(3) = NormalizeAngle(x_diff(3));
 
     P_ += weights_(i) * x_diff * x_diff.transpose();
   }
@@ -380,7 +382,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
     VectorXd z_diff = Zsig.col(i) - Zsig.col(0); //z_pred;
 
     // normalize angle - phi
-    z_diff(1) = tools.NormalizeAngle(z_diff(1));
+    z_diff(1) = NormalizeAngle(z_diff(1));
 
     S += weights_(i) * z_diff * z_diff.transpose();
   }
@@ -410,13 +412,13 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
     // residual
     VectorXd z_diff = Zsig.col(i) - Zsig.col(0); //z_pred;
     //angle normalization
-    z_diff(1) = tools.NormalizeAngle(z_diff(1));
+    z_diff(1) = NormalizeAngle(z_diff(1));
 
     // state difference
     VectorXd x_diff = Xsig_pred_.col(i) - Xsig_pred_.col(0); //x_;
 
     // angle normalization
-    x_diff(3) = tools.NormalizeAngle(x_diff(3));
+    x_diff(3) = NormalizeAngle(x_diff(3));
 
     Tc = Tc + weights_(i) * x_diff * z_diff.transpose();
   }
@@ -428,7 +430,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   VectorXd z_diff = z - z_pred;
 
   // normalize angle
-  z_diff(1) = tools.NormalizeAngle(z_diff(1));
+  z_diff(1) = NormalizeAngle(z_diff(1));
 
   // update state mean and covariance matrix
   x_ = x_ + K * z_diff;
@@ -438,4 +440,9 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   cout << "radar NIS = " << NIS_radar_ << endl;
 
   cout << "UpdateRadar ends" << endl;
+}
+
+double UKF::NormalizeAngle(double& angle) {
+    // cout << "angle = " << angle << endl;
+    return atan2(sin(angle), cos(angle));
 }

@@ -70,8 +70,6 @@ public:
 
   double NIS_laser_;
   double NIS_radar_;
-  Tools tools;
-  long long previous_timestamp_;
 
   /**
    * Constructor
@@ -108,6 +106,12 @@ public:
    * @param meas_package The measurement at k+1
    */
   void UpdateRadar(MeasurementPackage meas_package);
+
+  /**
+  * A helper method to normalize angle
+  * @param angle angle to normalize
+  */
+  double NormalizeAngle(double& angle);
 };
 
 #endif /* UKF_H */

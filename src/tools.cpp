@@ -45,8 +45,3 @@ VectorXd Tools::CalculateRMSE(const vector<VectorXd> &estimations,
     //return the result
     return rmse;
 }
-
-double Tools::NormalizeAngle(double& angle) {
-    // cout << "angle = " << angle << endl;
-    return atan2(sin(angle), cos(angle));
-}
