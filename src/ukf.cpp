@@ -26,14 +26,14 @@ UKF::UKF() {
   P_ = MatrixXd::Zero(5, 5);
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
-  std_a_ = .5;
+  std_a_ = 2.0;
 
   // Process noise standard deviation yaw acceleration in rad/s^2
-  std_yawdd_ = .05;
+  std_yawdd_ = .18;
   
   //DO NOT MODIFY measurement noise values below these are provided by the sensor manufacturer.
   // Laser measurement noise standard deviation position1 in m
-  std_laspx_ = 0.15;
+  std_laspx_ = 0.12;
 
   // Laser measurement noise standard deviation position2 in m
   std_laspy_ = 0.15;
@@ -82,14 +82,14 @@ UKF::~UKF() {}
 void UKF::InitializeMeasurement(MeasurementPackage meas_package) {
   cout << "InitializeMeasurement starts" << endl;
   // initialize variables
-  x_ << 1, 1, 1, 1, 1;
+  x_ << 0, 0, 0, 0, 0;
 
   // for LIDAR data
   if (meas_package.sensor_type_ == MeasurementPackage::LASER && use_laser_) {
     double px = meas_package.raw_measurements_(0);
     double py = meas_package.raw_measurements_(1);
 
-    x_ << px, py, 1, 1, 1;
+    x_ << px, py, sqrt((px*px+py*py)), 0, 0;
   }
   // for RADAR data
   if (meas_package.sensor_type_ == MeasurementPackage::RADAR && use_radar_) {
@@ -105,11 +105,11 @@ void UKF::InitializeMeasurement(MeasurementPackage meas_package) {
     x_ << px, py, vx, vy, 1;
   }
 
-  P_ << 1, 0., 0., 0., 0.,
-        0., 1, 0., 0., 0.,
+  P_ << .01, 0., 0., 0., 0.,
+        0., .01, 0., 0., 0.,
         0., 0., 1, 0., 0.,
-        0., 0., 0., 1, 0.,
-        0., 0., 0., 0., 1;
+        0., 0., 0., .01, 0.,
+        0., 0., 0., 0., .01;
 
   // initialize previous time
   time_us_ = meas_package.timestamp_;
@@ -202,7 +202,7 @@ void UKF::Prediction(double delta_t) {
   // create augmented sigma points
   for(int i = 0; i < n_aug_; i++) {
     Xsig_aug.col(i+1) = x_aug + sqrt(lambda_ + n_aug_) * L.col(i);
-    Xsig_aug.col(n_aug_+i+1) = x_aug + sqrt(lambda_ + n_aug_) * L.col(i);
+    Xsig_aug.col(n_aug_+i+1) = x_aug - sqrt(lambda_ + n_aug_) * L.col(i);
   }
 
   /////////////////////////////
@@ -427,7 +427,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   MatrixXd K = Tc * S.inverse();
 
   // residual
-  VectorXd z_diff = z - z_pred;
+  VectorXd z_diff = z - Zsig.col(0); //z_pred;
 
   // normalize angle
   z_diff(1) = NormalizeAngle(z_diff(1));
