@@ -68,6 +68,9 @@ public:
   ///* Sigma point spreading parameter
   double lambda_;
 
+  ///* measurement noise covariance matrix
+  MatrixXd R;
+
   double NIS_laser_;
   double NIS_radar_;
 
@@ -111,7 +114,7 @@ public:
   * A helper method to normalize angle
   * @param angle angle to normalize
   */
-  double NormalizeAngle(double& angle);
+  double NormalizeAngle(double angle);
 };
 
 #endif /* UKF_H */
