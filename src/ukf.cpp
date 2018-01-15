@@ -311,7 +311,7 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   MatrixXd K =  P_ * Ht * Si;
 
   // Update new state of x_ and P_
-  // x_ += (K * y);
+  x_ += (K * y);
   // MatrixXd I = MatrixXd::Identity(x_.size(), x_.size());
   // P_ = (I - K * H_laser) * P_;
   P_ -= K * H_laser * P_;
