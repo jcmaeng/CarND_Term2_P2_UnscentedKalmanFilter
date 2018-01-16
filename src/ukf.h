@@ -70,7 +70,9 @@ public:
 
   ///* measurement noise covariance matrix
   MatrixXd R;
+  MatrixXd R_laser;
 
+  int msize;
   double NIS_laser_;
   double NIS_radar_;
 
