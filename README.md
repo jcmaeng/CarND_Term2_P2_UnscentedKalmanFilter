@@ -1,5 +1,7 @@
 # **Unscented Kalman Filter**
 
+![simulator result](./images/sim_result.png)
+
 ## Goals
 * Estimate the state of a vehicle with given radar and lidar data via UKF(Unscented Kalman Filter)
 
@@ -29,4 +31,4 @@
 5. Select 1/2 project and start with ***Dataset1***
 6. Result is as follows
 
-![simulator result](./images/sim_result.png)
+
